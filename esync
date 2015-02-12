@@ -1,0 +1,873 @@
+#!/usr/bin/perl -w
+# #############
+
+## ESYNC - Electronic Syncronisation Script
+## =========================================
+##
+## Version 1.0, Copyright (C) 2006  Christian "metax." Simon
+## Für Esync besteht KEINERLEI GARANTIE.
+## Esync ist freie Software, die Sie unter bestimmten Bedingungen weitergeben dürfen.
+##
+## =========================================
+## Esync ist unter der "GNU General Public License" (GPL) Version 2 veröffentlicht.
+## Näheres finden Sie in der Datei "LICENSE".
+
+use strict;
+use Term::ANSIColor qw(:constants);
+
+### START OPTIONS #########
+
+my $esyncdir = '$ENV{HOME}/esync'; # No ending slashes !
+my $remote_esyncdir = "/home/esync";
+my $remote_server = '';
+my $remote_user = '';
+my $alwaystar = 0;
+
+### END OPTIONS ###########
+
+my $cmd_mount = 'sshfs {REMOTE_USER}@{REMOTE_ADDR}:{REMOTE_DIR} {LOCAL_DIR}/remote';
+my $cmd_umount = 'fusermount -u {LOCAL_DIR}/remote';
+
+sub startup()
+{
+	# Print startup Messages and do startup stuff
+	print BOLD CYAN "Esync 1.0 (Perl, Linux)".RESET."\n\n";
+	#print ' ['.BOLD.GREEN.'*'.RESET.'] Verbindung herstellen ...'."\n";
+	print BOLD.YELLOW.'Bitte jetzt das Kennwort fuer den Serveraccount eingeben:'.RESET."\n";
+	`$cmd_mount`;
+	print "\n";
+	if(-e $esyncdir.'/remote/.esyncdir')
+	{
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Verbindung herstellen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+	}
+	else
+	{
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Verbindung herstellen ... ['.BOLD.RED.'FEHLER'.RESET.']'."\n\n";
+		print BOLD.RED.'Verbindung nicht hergestellt oder Serverordner ungueltig! Ende ...'.RESET."\n";
+		print 'Versuche, Verbindung zu trennen ...'."\n";
+		`$cmd_umount`;
+		exit 1;
+	}
+
+}
+
+sub cleanup()
+{
+	# Umount, etc.
+
+	`$cmd_umount`;
+
+	if(-e $esyncdir.'/remote/files.esync')
+	{
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Verbindung trennen ... ['.BOLD.RED.'Fehler'.RESET.']'."\n";
+	}
+	else
+	{
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Verbindung trennen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n\n";
+	}
+
+
+	print 'Programm beendet.'.RESET."\n\n";
+
+}
+
+sub main()
+{
+	
+	#for (my $i = 0; $i <= $#ARGV; $i++) {
+	#	print "Parameter $i ist: ".$ARGV[$i]."\n";
+	#}
+
+	if(lc($ARGV[0]) eq '--help') # Help
+	{
+		print "Zur Zeit ist noch keine Hilfe verfuegbar.\nBitte lies stattdessen das Tutorial (doc/tutorial-de.htm)\n";
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--list-keys')
+	{
+		&list_keys;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--list')
+	{
+		&list;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--update-keys')
+	{
+		&update_keys;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--export-key')
+	{
+		&export_key;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--clean')
+	{
+		&clean;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--get')
+	{
+		&get;
+		exit 0;
+	}
+	elsif(lc($ARGV[0]) eq '--make')
+	{
+		&make;
+		exit 0;
+	}
+	else
+	{
+		print BOLD 'Benutzung:'.RESET."\n\n";
+		print ' esync --help'."\n";
+		print ' esync --usage'."\n\n";
+		print ' esync --clean'."\n\n";
+		print ' esync --list-keys'."\n";
+		print ' esync --update-keys'."\n";
+		print ' esync --export-key '.BOLD GREEN.'schluessel'.RESET."\n\n";
+		print ' esync --list'."\n";
+		print ' esync --get [--download|--decode|--unzip|--untar] '.BOLD MAGENTA.'paketname'.RESET."\n";
+		print ' esync --make [--noencode|--for:'.BOLD GREEN.'empfaenger'.RESET.'] '.BOLD MAGENTA.'paketname '.BOLD YELLOW.'file1'.RESET.' ['.BOLD YELLOW.'file2'.RESET.' ['.BOLD YELLOW.'file3'.RESET.' ['.BOLD YELLOW.'...'.RESET.']]]'.RESET."\n\n";
+		exit 0;
+	}
+
+}
+
+sub list_keys()
+{
+	# List available GPG keys
+	print 'Persoenliche Schluessel (entschuesseln):'.RESET."\n";
+	my $buffer = `gpg --list-secret-keys`;
+	while($buffer =~ /^uid\s*(\S.*)$/gm) { print ' ['.BOLD.GREEN.'*'.RESET.'] '.BOLD GREEN.$1.RESET."\n" }
+	print 'Oeffentliche Schluessel (verschuesseln):'.RESET."\n";
+	$buffer = `gpg --list-keys`;
+	while($buffer =~ /^uid\s*(\S.*)$/gm) { print ' ['.BOLD.GREEN.'*'.RESET.'] '.BOLD GREEN.$1.RESET."\n" }
+}
+
+sub update_keys()
+{
+	&startup;
+
+	print ' ['.BOLD.GREEN.'*'.RESET.'] Schluessel durchsuchen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n\n";
+	foreach my $filename (glob("$esyncdir/remote/keys/*.key")) 
+	{
+		 print `gpg --import $filename`;
+	}
+	
+	print "\n";
+
+	print BOLD YELLOW "Hinweis: Falls ein neuer Schluessel importiert wurde, ist er von GPG vermutlich als \"nicht vertrauenswuerdig\" eingestuft.\nWenn du dir sicher bist, dass der Schluessel echt ist, kannst du den Schluessel signieren,\ndamit du nicht bei jeder Benutzung eine Warnung von GPG angezeigt bekommst:\n".GREEN."gpg --sign-key schluesselname".RESET."\n\n";
+
+	&cleanup;
+}
+
+sub export_key()
+{
+	if($#ARGV != 1)
+	{
+		print BOLD.RED.'Falsche Syntax! Bitte benutze folgende Sytax fuer --eyport-key:'.RESET."\n";
+		print ' esync --export-key '.BOLD GREEN.'schluessel'.RESET."\n";
+		exit 1;
+	}
+	&locksandbox;
+	`gpg --export -a $ARGV[1] > $esyncdir/sandbox/$ARGV[1].key`;
+	if(-z "$esyncdir/sandbox/$ARGV[1].key")
+	{
+		&unlocksandbox;
+		exit 1;
+	}
+
+	my $md5 = `md5sum $esyncdir/sandbox/$ARGV[1].key`;
+	chomp($md5);
+	$md5 =~ s/^(\w+) .*$/$1/;
+	print ' ['.BOLD.GREEN.'*'.RESET.'] Hash errechnen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+	`mv $esyncdir/sandbox/$ARGV[1].key $esyncdir/sandbox/$md5.key`;
+	&startup;
+	`cp $esyncdir/sandbox/$md5.key $esyncdir/remote/keys/$md5.key`;
+	print ' ['.BOLD.GREEN.'*'.RESET.'] Hochladen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+	&unlocksandbox;
+	&cleanup;
+}
+
+sub clean()
+{
+	`rm -R $esyncdir/sandbox/*`;
+	print ' ['.BOLD.GREEN.'*'.RESET.'] Temporaerdateien loeschen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+}
+
+sub list()
+{
+	# List Packages
+	&startup;
+
+	my @filelist = ();
+	foreach (glob("$esyncdir/remote/files/*.esync"))
+	{
+		s/^.*\/(\w+)\.esync/$1/i; # Remove basedir and extension
+		push(@filelist,$_);
+	}
+	@filelist = sort(@filelist);
+
+	print `clear`;
+	print("\n".BOLD YELLOW."TAR".RESET."  - ".BOLD GREEN."Verschluesselt".RESET."         - ".BOLD CYAN."Paketgroesse".RESET." - ".BOLD MAGENTA."Paketname".RESET."\n".('=' x 4).'   '.('=' x 22).'   '.('=' x 12).'   '.('=' x 22)."\n");
+
+	foreach my $file (@filelist)
+	{
+
+		my $size = 0;
+		my $sizestr = '';
+		my $enc = '*';
+		my $tar = '0';
+
+		# Groeße
+		$size = -s "$esyncdir/remote/files/$file.esync";
+		if($size >= 1073741824)
+		{ $sizestr = sprintf("%.2f", $size/1073741824). ' GB'; }
+		elsif($size >= 1048576)
+		{ $sizestr = sprintf("%.2f", $size/1048576). ' MB'; }
+		elsif($size >= 1024)
+		{ $sizestr = sprintf("%.2f", $size/1024). ' KB'; }
+		else
+		{ $sizestr = sprintf("%.2f", $size). ' B'; }
+
+		my $infos = `cat $esyncdir/remote/info/$file.info`;
+		chomp ($infos);
+		#print $infos;
+
+
+		if($infos =~ /$file:(\w+|\*):(0|t)/i)
+		{
+			print BOLD YELLOW;
+			print 'Ja  ' if($2 eq 't');
+			print 'Nein' if($2 eq '0');
+			print RESET;
+			print '   ';
+			print BOLD GREEN;
+			print '<nicht verschluesselt>' if($1 eq '*');
+			print 'Fuer "'.$1.'"'.(' ' x (15 - length($1))) if($1 ne '*' && (length($1) <= 15));
+			print 'Fuer "'.substr($1,0,12).'..."' if($1 ne '*' && (length($1) > 15));
+			print RESET;
+			print '   ';
+			print BOLD CYAN;
+			print $sizestr.(' ' x (12 - length($sizestr)));
+			print RESET;
+			print '   ';
+			print BOLD MAGENTA;
+			print $file;
+			print RESET;			
+			
+
+			print "\n";
+		}
+		else
+		{
+			print BOLD RED."Das Paket \"$file\" hat einen unguelitgen Infodatensatz!".RESET."\n";
+		}
+	}
+
+	#print RESET."\nDruecke <ENTER> um fortzufahren.";
+	#<STDIN>; # ENTER
+
+	print "\n";
+	&cleanup;	
+}
+
+sub get()
+{
+	# Retrive a packet
+	
+	my $pakname = 'unknown'; # packet name
+	my $encode = 0; # gpg use
+	my $enc_for = ''; # gpg recipient
+	my $enc_str = '';
+	my $tar = 0; # tarball?
+	my $tar_str = 'Nein';
+
+	my $size = 0;
+	my $sizestr = '';
+	
+	my $fetchlevel = 0;
+	# Fetchlevel: What should be done?
+	# 0: Download
+	# 1: Decode
+	# 2: unzip
+	# 3: untar
+	my $fetchstr = '';
+
+	my $commandline = ''; # Commandline buffer
+	foreach(@ARGV)
+	{
+		$commandline .= $_.' ';
+	}
+
+	if($commandline =~ /^--get (|--download|--decode|--unzip|--untar) ?(\w+) ?$/i)
+	{
+		$pakname = $2;
+		
+		if($1 =~ /^--download$/i)
+		{
+			$fetchlevel = 0;
+			$fetchstr = 'Nur Herunterladen';
+		}
+		elsif($1 =~ /^--decode$/i)
+		{
+			$fetchlevel = 1;
+			$fetchstr = 'Herunterladen und Entschluesseln';
+		}
+		elsif($1 =~ /^--unzip$/i)
+		{
+			$fetchlevel = 2;
+			$fetchstr = 'Herunterladen, Entschluesseln und Dekomprimieren';
+		}
+		else
+		{
+			$fetchlevel = 3;
+			$fetchstr = 'Herunterladen, Entschluesseln, Dekomprimieren und Entpacken';
+		}
+
+		&startup;
+
+		if(!-e $esyncdir."/remote/files/$pakname.esync")
+			{ print BOLD RED."Es existiert kein Paket mit dem Namen \"$pakname\". Bitte starte das Programm mit gueltigen Parametern.".RESET."\n"; &cleanup; exit 1; }
+		if(!-e $esyncdir."/remote/info/$pakname.info")
+			{ print BOLD RED."Es existiert keine Infodatei zu dem Paket \"$pakname\". Moeglicherweise ist das Paket beschaedigt.".RESET."\n"; &cleanup; exit 1; }
+
+		my $infos = `cat $esyncdir/remote/info/$pakname.info`;
+		chomp ($infos);
+
+		if($infos =~ /$pakname:(\w+|\*):(0|t)/i)
+		{
+			$tar = 1 if($2 eq 't');
+			$tar = 0 if($2 eq '0');
+			$encode = 1;
+			$encode = 0 if($1 eq '*');
+			$enc_for = $1 if($1 ne '*');
+
+			$enc_str = 'Nein' if($1 eq '*');
+			$enc_str = 'Fuer '.$enc_for if($1 ne '*');
+
+			$tar_str = 'Ja' if($tar == 1);
+		}
+		else
+		{
+			print BOLD RED."Das Paket \"$pakname\" hat einen unguelitgen Infodatensatz!".RESET."\n";
+			&cleanup; 
+			exit 1;
+		}
+
+		$size = -s "$esyncdir/remote/files/$pakname.esync";
+		if($size >= 1073741824)
+		{ $sizestr = sprintf("%.2f", $size/1073741824). ' GB'; }
+		elsif($size >= 1048576)
+		{ $sizestr = sprintf("%.2f", $size/1048576). ' MB'; }
+		elsif($size >= 1024)
+		{ $sizestr = sprintf("%.2f", $size/1024). ' KB'; }
+		else
+		{ $sizestr = sprintf("%.2f", $size). ' B'; }
+
+		# Sure?
+		print "\n".' ['.BOLD.GREEN.'*'.RESET.'] Folgende Informationen wurden uebergeben: '."\n\n";
+		print 'Paketname: '.BOLD MAGENTA.$pakname.RESET."\n";
+		print 'Paketgroesse: '.$sizestr."\n";
+		print 'Verschluesselung: '.BOLD.GREEN.$enc_str.RESET."\n";
+		print 'Tarball (Archiv): '.$tar_str."\n";
+		print 'Ablauf: '.$fetchstr."\n";
+		print 'Moechtest du mit diesen Angaben fortfahren? (J/n) ';
+		my $answer = <STDIN>;
+		chomp($answer);
+		if($answer !~ /^(y|j|yes|ja|)$/i)
+			{ print 'Der Vorgang wird abgebrochen ...'."\n\n"; &cleanup; exit 0; }
+		
+		&locksandbox;
+		
+		print "\n".' ['.BOLD.GREEN.'*'.RESET.'] Vorgang startet jetzt ... (Kann etwas dauern ;)'."\n";
+
+		# Level 0: Download
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Herunterladen startet jetzt'."\n";
+		print `cp $esyncdir/remote/files/$pakname.esync $esyncdir/sandbox/$pakname.esync`;
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Datei heruntergeladen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+		
+		my $ext = '';
+		$ext .= '.tar' if($tar == 1);
+		$ext .= '.gz';
+		$ext .= '.gpg' if($encode == 1);
+
+		my $newext = '';
+
+		if($fetchlevel == 0)
+		{
+			print `cp $esyncdir/sandbox/$pakname.esync $esyncdir/files/$pakname$ext`;
+		}
+		else
+		{
+			print `cp $esyncdir/sandbox/$pakname.esync $esyncdir/sandbox/$pakname$ext`;
+
+			# Level 1: Decode
+			if($encode == 1)
+			{
+				$newext = substr($ext,0,-4);
+
+				print ' ['.BOLD.GREEN.'*'.RESET.'] Entschluesseln startet jetzt'."\n";		
+				print `gpg -o $esyncdir/sandbox/$pakname$newext --decrypt $esyncdir/sandbox/$pakname$ext`;
+
+				if(!-e "$esyncdir/sandbox/$pakname$newext")
+				{
+					print BOLD RED."Das entschluesseln ist fehlgeschlagen; vermutlich besitzt du nicht den richtigen privaten Schluessel fuer diese Datei. Abbruch ...".RESET."\n"; 
+					&unlocksandbox;
+					&cleanup; 
+					exit 1;
+				}
+
+				$ext = $newext;
+				$newext = '';
+				
+				print ' ['.BOLD.GREEN.'*'.RESET.'] Datei entschluesselt ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+			}
+				
+			if($fetchlevel == 1)
+			{
+				print `cp $esyncdir/sandbox/$pakname$ext $esyncdir/files/$pakname$ext`;
+			}
+			else
+			{
+				# Level 2: Decompress
+				$newext = substr($ext,0,-3);
+				
+				print ' ['.BOLD.GREEN.'*'.RESET.'] Dekomprimieren startet jetzt'."\n";
+				print `gzip --decompress < $esyncdir/sandbox/$pakname$ext > $esyncdir/sandbox/$pakname$newext`;
+				
+				$ext = $newext;
+				$newext = '';
+				
+				print ' ['.BOLD.GREEN.'*'.RESET.'] Datei dekomprimiert ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+				
+				if($fetchlevel == 2 || $tar == 0) # Cannot untar, when it's no tar ;)
+				{
+					print `cp $esyncdir/sandbox/$pakname$ext $esyncdir/files/$pakname$ext`;
+				}
+				else
+				{
+					# Level3: Untar
+					$newext = substr($ext,0,-4);
+					
+					print ' ['.BOLD.GREEN.'*'.RESET.'] Entpacken startet jetzt'."\n";
+					
+					if(!-d "$esyncdir/files/$pakname")
+					{ `mkdir $esyncdir/files/$pakname`; }
+
+					print `tar -xf $esyncdir/sandbox/$pakname$ext -C $esyncdir/files/$pakname`;
+
+					$ext = $newext;
+					$newext = '';
+					
+					print ' ['.BOLD.GREEN.'*'.RESET.'] Datei(en) entpackt ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+				}
+			}
+
+		}
+		&unlocksandbox;
+		&cleanup;
+		
+
+	}
+	else
+	{
+		print BOLD.RED.'Falsche Syntax! Bitte benutze folgende Sytax fuer --get:'.RESET."\n";
+		print ' esync --get [--download|--decode|--unzip|--untar] '.BOLD MAGENTA.'paketname'.RESET."\n\n";
+		exit 1;
+	}
+}
+
+sub locksandbox()
+{
+	`touch $esyncdir/sandbox/$$.pid`;
+}
+
+sub unlocksandbox()
+{
+	`rm  $esyncdir/sandbox/$$.pid`; # remove process locker
+	my @pl=glob("$esyncdir/sandbox/*.pid"); # Any remaining processes
+	if($#pl == -1)
+	{
+		`rm -R $esyncdir/sandbox/*`;
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Temporaerdateien loeschen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+	}
+}
+
+sub make ()
+{
+	# Make a Package ...
+
+	# Check parameters:
+	my $pakname = 'unknown'; # packet name
+	my @filelist = (); # List of files (if not tar - only one file)
+	my $encode = 0; # gpg use
+	my $enc_for = ''; # gpg recipient
+	my $enc_str = ''; # string
+
+	my $commandline = ''; # Commandline buffer
+	foreach(@ARGV)
+	{
+		s/ /\\ /g; # Subst. [space] to \[space]
+		$commandline .= $_.' ';
+	}
+	#chomp($commandline);
+	#print($commandline."\n");
+	if($commandline =~ /^--make (|--noencode |--for:(\w+) )(\w+) ((?>\S+ ?)+)$/i)
+	{
+		#print '$1 (GPG): '.$1."\n";
+		#print '$2 (GPG:FOR): '.$2."\n";
+		#print '$3 (NAME): '.$3."\n";
+		#print '$4 (FILES): '.$4."\n";
+
+		if($1 eq '--noencode ' || $1 eq '')
+			{ $encode = 0; $enc_for = ''; $enc_str = 'Nicht verschluesseln' }
+		else
+			{ $encode = 1; $enc_for = $2; $enc_str = 'Fuer die Identitaet "'.BOLD GREEN.$2.RESET.'" verschluesseln' }
+
+		#print '$1 (GPG): '.$1."\n";
+		#print '$2 (GPG:FOR): '.$2."\n";
+		#print '$3 (NAME): '.$3."\n";
+		#print '$4 (FILES): '.$4."\n";
+
+
+		$pakname = $3;
+		@filelist = split(/(?<!\\) /,$4);
+		my $filestr = join(RESET.', '.BOLD.YELLOW,@filelist);
+		$filestr =~ s/\\ / /g; # Subst. \[space] to [space]
+
+		foreach (@filelist) # valid files?
+		{
+			s/\\ / /g; # Subst. \[space] to [space]
+			if(!-e $_)
+				{ print BOLD RED."Die angegebene Datei \"$_\" existiert nicht. Bitte starte das Programm mit gueltigen Parametern.".RESET."\n"; exit 1; }
+		}
+
+
+		&startup;
+
+		# valid name?
+		if(-e $esyncdir."/files/$pakname.esync")
+			{ print BOLD RED."Ein Paket mit dem Namen \"$pakname\" scheint es bereits zu geben. Bitte starte das Programm mit gueltigen Parametern.".RESET."\n"; &cleanup; exit 1; }
+		if(-e $esyncdir."/remote/files/$pakname.esync")
+			{ print BOLD RED."Ein Paket mit dem Namen \"$pakname\" scheint es bereits zu geben. Bitte starte das Programm mit gueltigen Parametern.".RESET."\n"; &cleanup; exit 1; }
+		if(!-w $esyncdir."/files/")
+			{ print BOLD RED."Das Paket mit dem Namen \"$pakname\" kann nicht erstellt werden.\nBitte sorge dafuer, dass das Verzeichnis beschrieben werden kann.".RESET."\n"; &cleanup; exit 1; }
+		`touch $esyncdir/files/$pakname.esync`;
+		if(!-w $esyncdir."/files/$pakname.esync")
+			{ print BOLD RED."Das Paket mit dem Namen \"$pakname\" kann nicht geschrieben werden.\nUnbekannter Fehler ...".RESET."\n"; &cleanup; exit 1; }
+		`rm -f $esyncdir/files/$pakname.esync`;
+
+		# Valid Identity
+		if($encode == 1 && $enc_for ne '*')
+		{
+			my $test_key = `gpg --list-keys $enc_for`;
+			if($test_key !~ /$enc_for/im)
+				{ print BOLD RED."GPG findet keinen oeffentlichen Schluessel zur Verschluesselung von \"$enc_for\".\nBitte stelle sicher, dass du den oeffentlichen Schluessel dieser Identitaet bereits importiert hast.".RESET."\n"; &cleanup; exit 1; }
+		}
+
+		# Sure?
+		print "\n".' ['.BOLD.GREEN.'*'.RESET.'] Folgende Informationen wurden uebergeben: '."\n\n";
+		print 'Verschluesselung: '.$enc_str."\n";
+		print 'Paketname: '.BOLD MAGENTA.$pakname.RESET."\n";
+		print 'Datei(en): '.BOLD YELLOW.$filestr.RESET."\n\n";
+		print 'Moechtest du mit diesen Angaben fortfahren? (J/n) ';
+		my $answer = <STDIN>;
+		chomp($answer);
+		if($answer !~ /^(y|j|yes|ja|)$/i)
+			{ print 'Der Vorgang wird abgebrochen ...'."\n\n"; &cleanup; exit 0; }
+		
+
+		# Everything seems O.K.
+
+		print "\n".' ['.BOLD.GREEN.'*'.RESET.'] Vorgang startet jetzt ... (Kann etwas dauern ;)'."\n";
+
+		&locksandbox;
+
+		# Schritt 1: Tar ?
+		my $tar = 0;
+		if($#filelist > 0 || -d $filelist[0] || $alwaystar == 1)
+		{
+			# TAR
+			$tar = 1;
+			my $tarlist = '';
+			foreach (@filelist) # Convert Blanks
+			{
+				s/ /\\ /g; # Subst. [space] to \[space]
+				$tarlist .= $_.' ';
+				
+			}
+			chomp($tarlist);
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Packvorgang (tar) startet jetzt'."\n";
+			print `tar cf $esyncdir/sandbox/$pakname.file $tarlist`;
+			if(!-e "$esyncdir/sandbox/$pakname.file")
+				{ print BOLD RED."Packvorgang nicht erfolgreich.\nUnbekannter Fehler ...".RESET."\n"; &cleanup; exit 1; }
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Dateien gepackt (tar) ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+		}
+		else
+		{
+			# COPY
+			my $shfile = $filelist[0];
+			$shfile =~ s/ /\\ /g;
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Kopiervorgang startet jetzt'."\n";
+			print `cp  $shfile $esyncdir/sandbox/$pakname.file`;
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Datei kopiert ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+		}
+
+		# Schritt 2: GZIP
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Komprimierung startet jetzt'."\n";
+		print `gzip < $esyncdir/sandbox/$pakname.file > $esyncdir/sandbox/$pakname.file.gz`;
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Datei komprimiert ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+
+		# Schritt 2: GPG
+		if($encode == 0)
+		{
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Verschluesselung: Nicht gewuenscht ... ['.BOLD.YELLOW.'UEBERSPRUNGEN'.RESET.']'."\n";
+
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Hochladen startet jetzt'."\n";
+			print `cp $esyncdir/sandbox/$pakname.file.gz $esyncdir/remote/files/$pakname.esync`;
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Datei hochgeladen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+		}
+		else
+		{	
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Verschluesselung startet jetzt'."\n";
+			print `gpg --encrypt -r $enc_for $esyncdir/sandbox/$pakname.file.gz`;
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Verschluesselung ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Hochladen startet jetzt'."\n";
+			print `cp $esyncdir/sandbox/$pakname.file.gz.gpg $esyncdir/remote/files/$pakname.esync`;
+			print ' ['.BOLD.GREEN.'*'.RESET.'] Datei hochgeladen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+		}
+
+		# Schritt 3: Infos
+		my $theinfo = "$pakname:";
+		if($encode == 1)
+		{
+			$theinfo .= $enc_for;
+		}
+		else
+		{
+			$theinfo .= '*';
+		}
+		$theinfo .= ':';
+		if($tar == 1)
+		{
+			$theinfo .= 't';
+		}
+		else
+		{
+			$theinfo .= '0';
+		}
+		`echo \'$theinfo\' >> $esyncdir/remote/info/$pakname.info`;
+		print ' ['.BOLD.GREEN.'*'.RESET.'] Paketinfos abspeichern ... ['.BOLD.GREEN.'OK'.RESET.']'."\n";
+
+		# Schritt 4: Sandbox leeren
+		&unlocksandbox;
+
+
+		# Fertig
+		&cleanup;
+	}
+	else
+	{
+		print BOLD.RED.'Falsche Syntax! Bitte benutze folgende Sytax fuer --make:'.RESET."\n";
+		print ' esync --make [--noencode|--for:'.BOLD GREEN.'empfaenger'.RESET.'] '.BOLD MAGENTA.'paketname '.BOLD YELLOW.'file1'.RESET.' ['.BOLD YELLOW.'file2'.RESET.' ['.BOLD YELLOW.'file3'.RESET.' ['.BOLD YELLOW.'...'.RESET.']]]'.RESET."\n\n";
+		exit 1;
+	}
+	
+	
+}
+
+
+sub test()
+{
+	# Test, if esync can run ...
+	if(!$<)
+	{
+		print BOLD YELLOW."Mama hat immer gesagt: \"Arbeite nicht als root!\"".RESET."\n<weiter>";
+		<STDIN>;
+	}
+
+	if(!`which gpg`)
+	{
+		print BOLD RED."Esync benoetigt das Programm gpg (http://www.gnupg.org/), um zu laufen!".RESET."\n";
+		exit 1;
+	}
+	if(!`which tar`)
+	{
+		print BOLD RED."Esync benoetigt das Programm tar, um zu laufen!".RESET."\n";
+		exit 1;
+	}
+	if(!`which gzip`)
+	{
+		print BOLD RED."Esync benoetigt das Programm gzip, um zu laufen!".RESET."\n";
+		exit 1;
+	}
+}
+
+sub iniload()
+{
+	
+
+	# Load INI Data
+	my $theini;
+	if(-e "$ENV{HOME}/.esync")
+	{
+		$theini = `cat $ENV{HOME}/.esync`;
+	}
+	elsif(-e "/etc/esyncrc")
+	{
+		$theini = `cat /etc/esyncrc`;
+	}
+	else
+	{
+		print BOLD RED."FEHLER: Es wurden keine Einstellungen gefunden!\n".
+		"Die Einstellungen muessen in der Datei ".BOLD YELLOW."$ENV{HOME}/.esync".BOLD RED." (dieser Benutzer) oder".
+		BOLD.YELLOW."/etc/esyncrc".BOLD RED." (alle Benutzer) gespeichert werden.".RESET."\n\n";
+		
+		print BOLD YELLOW."Soll esync eine Beispielkonfigurationsdatei in $ENV{HOME}/.esync erzeugen? (J/n) ".RESET;
+		my $answer = <STDIN>;
+		chomp($answer);
+		if($answer =~ /^(j|y|ja|yes|)$/i)
+		{
+			print "\n".' ['.BOLD.GREEN.'*'.RESET.'] Konfiguration '.$ENV{HOME}.'/.esync erzeugen ... ['.BOLD.GREEN.'OK'.RESET.']'."\n\n";
+
+			my $conf = <<EXAMPLE_CONFIG
+# Beispiel-Konfigurationsdatei fuer esync
+#
+# Lokales Verzeichnis: LOCAL_DIR
+# ==============================
+# Dieses Verzeichnis enthaelt die Unterverzeichnisse "sandbox", "remote" und "files"
+# Im Verzeichnis "sandbox" werden temporaere Dateien zwischengespeichert,
+# im Verzeichnis "remote" wird ueber sshfs das entfernte Dateisystem gemounted und
+# im Verzeichnis "files" liegen heruntergeladene Pakete.
+# Das Verzeichnis LOCAL_DIR, sowie die drei Unterverzeichnisse muss von Hand erzeugt werden.
+#
+# Entferntes Dateisystem
+# ======================
+# Es wird ein ueber ssh zugaenglicher Server benoetigt, auf dem die Pakete gespeichert werden.
+# Am besten ist ein neutraler Serveraccount, mit einem leeren Verzeichnis fuer esync, sowie dessen Unterverzeichnisse:
+# "files" (als Speicher fuer Pakete)
+# "info" (fuer die Paketinformationen)
+# "keys" (fuer oeffentliche Schluessel).
+# Diese Verzeichnisse muessen ebenfalls selbst angelegt werden.
+# Ausserdem muss das entfernte Verzeichnis eine leere Datei mit dem Dateinamen ".esyncdir" enthalten,
+# damit esync davon ausgehen kann, an keine unerwuenschte Stelle zu schreiben.
+# Die Variablen sind:
+# REMOTE_ADDR (Serveraddresse)
+# REMOTE_USER (Serveraccount)
+# REMOTE_DIR (absolute Position des Esync-Verzeichnisses auf dem Server)
+#
+# Optionen
+# ========
+# ALWAYS_TAR (Ist diese Option aktiviert, so wird immer ein tar-Archiv erstellt, auch wenn das Paket nur aus einer Datei besteht)
+#
+# Mount-Befehle
+# =============
+# Hier kannst du die Befehle abaendern, mit denen das entfernte Dateisystem gemountet wird. 
+# Im Allgemeinen sollte man die Befehle nicht veraendern, es sei denn ...
+# *) man kann als Benutzer kein sshfs mounten ("fuse" muss installiert und aktiv sein; ausserdem sollte man der Gruppe "fuse" angehoeren)
+# *) man moechte sshfs anders mounten, als ueber den "sshfs" Befehl
+# *) man benutzt eine andere Schnittstelle fuer den Server (z.B. NFS)
+# Die Konfigurationsvariablen koennen in geschweifent Klammern (z.B. {LOCAL_DIR}) fuer die Mount-Befehle benutzt werden.
+
+
+# Beispiel:
+# LOCAL_DIR=/home/deinname/esync
+# REMOTE_ADDR=123.45.67.89
+# REMOTE_USER=esync
+# REMOTE_DIR=/home/esync/
+# ALWAYS_TAR
+# MOUNT=sshfs {REMOTE_USER}\@{REMOTE_ADDR}:{REMOTE_DIR} {LOCAL_DIR}/remote
+# UMOUNT=fusermount -u {LOCAL_DIR}/remote
+
+# echte Konfiguration ist hier:
+
+LOCAL_DIR=$ENV{HOME}/esync
+REMOTE_ADDR=
+REMOTE_USER=esync
+REMOTE_DIR=/home/esync/
+
+EXAMPLE_CONFIG
+;
+
+		my $file = open(FILE,">$ENV{HOME}/.esync");
+		if(not defined($file)) {
+			die "Fehler beim Erstellen der Datei: $!\n";
+		}
+		print FILE $conf;
+		close(FILE);
+
+		}
+		exit 1;
+	}
+
+	# Interpret INI
+	my @lines = split(/\n/,$theini);
+	foreach my $line (@lines)
+	{
+		if($line !~ /^(#|$)/)
+		{
+			if($line =~ /^LOCAL_DIR\s*=\s*(.+)$/i)
+			{
+				$esyncdir = $1;
+			}
+			elsif($line =~ /^REMOTE_DIR\s*=\s*(.+)$/i)
+			{
+				$remote_esyncdir = $1;
+			}
+			elsif($line =~ /^REMOTE_USER\s*=\s*(.+)$/i)
+			{
+				$remote_user = $1;
+			}
+			elsif($line =~ /^REMOTE_ADDR\s*=\s*(.+)$/i)
+			{
+				$remote_server = $1;
+			}
+			elsif($line =~ /^ALWAYS_?TAR/i)
+			{
+				$alwaystar = 1;
+			}
+			elsif($line =~ /^MOUNT\s*=\s*(.+)$/i)
+			{
+				$cmd_mount = $1;
+			}
+			elsif($line =~ /^UMOUNT\s*=\s*(.+)$/i)
+			{
+				$cmd_umount = $1;
+			}
+		}
+	}
+	if($esyncdir =~ m#^(.*)/$#) # Remove ending slash!
+	{
+		$esyncdir = $1;
+	}
+	if($remote_esyncdir =~ m#^(.*)/$#) # Remove ending slash!
+	{
+		$remote_esyncdir = $1;
+	}
+
+	# Update MOUNT/UMOUNT commands:
+	$_ = $cmd_mount;
+	s/\{REMOTE_USER\}/$remote_user/ig;
+	s/\{REMOTE_ADDR\}/$remote_server/ig;
+	s/\{REMOTE_DIR\}/$remote_esyncdir/ig;
+	s/\{LOCAL_DIR\}/$esyncdir/ig;
+	$cmd_mount = $_;
+
+	$_ = $cmd_umount;
+	s/\{REMOTE_USER\}/$remote_user/ig;
+	s/\{REMOTE_ADDR\}/$remote_server/ig;
+	s/\{REMOTE_DIR\}/$remote_esyncdir/ig;
+	s/\{LOCAL_DIR\}/$esyncdir/ig;
+	$cmd_umount = $_;
+}
+
+
+&test();
+&iniload();
+
+### Start Main Script
+&main();

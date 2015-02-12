@@ -1,0 +1,292 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head>
+<meta http-equiv="Content-Type"   content="text/html; charset=utf-8" />
+<meta name="language"          content="de" />
+<meta name="author"            content="Christian Simon" />
+<meta name="publisher"         content="Christian Simon" />
+<meta name="copyright"         content="Christian Simon" />
+<meta name="description"       content="kurzes Tutorial zu esync" />
+<meta name="keywords"          content="Esync Perl Synchronisation Tutorial Help" />
+<meta name="page-topic"        content="Hilfe, Tutorial, Anleitung" />
+<meta name="robots"            content="index,follow" />
+<title>Kurzes Tutorial zu ESync</title>
+<link href="esync.css" rel="stylesheet" type="text/css" media="screen" />
+</head>
+<body><div id="wrapper">
+
+<h1>Kurzes Tutorial zu ESync</h1>
+<h2>Dateien bequem verschlüsseln und übertragen</h2>
+
+<h3>Voraussetzungen:</h3>
+<p>Esync benötigt folgende Systemvoraussetzungen:</p>
+<ul>
+	<li>Ein Unix-ähnliches Betriebssystem (z.B. GNU/Linux)</li>
+	<li>Einen aktuellen Perl-Interpreter</li>
+	<li>
+		Falls du eine SSH-Verbindung aufbauen möchtest (Standard):
+		<ul>
+			<li>Das „fuse“-Kernelmodul (<a href="http://fuse.sourceforge.net/">http://fuse.sourceforge.net/</a>)</li>
+			<li>
+				Unterstützung für das sshfs Dateisystem 
+				(<a href="http://fuse.sourceforge.net/sshfs.html">http://fuse.sourceforge.net/sshfs.html</a>)
+			</li>
+		</ul>
+	</li>
+	<li>Eine Internet- oder Netzwerkverbindung, falls du ESync mit mehreren Rechnern oder Personen nutzen willst</li>
+	<li>Das Programm GPG (Gnu Privacy Guard, <a href="http://www.gnupg.org/">http://www.gnupg.org/</a>)</li>
+	<li>
+		Die GNU Programme „cat“, „cp“, „mv“, „rm“, „touch“, „mkdir“, „tar“, „gzip“
+	</li>
+	<li>Ein Terminal mit Farbdarstellung (für eine farbige Ausgabe)</li>
+	<li>Ein Homeverzeichnis mit Schreibrechten</li>
+</ul>
+<p>
+	Ich gehe davon aus, dass die allermeisten Voraussetzungen auf einem modernen System schon von vorneherein gegeben sind.
+	Für die noch benötigten Teile (vermutlich fuse, gpg und sshfs) stehen möglicherweise 
+	Distributionspakete für dein Betriebssystem bereit.
+</p>
+
+<h3>Installation und Konfiguration</h3>
+<p>
+	Nachdem du das Programm „esync“ heruntergeladen hast, müssen noch einige Dinge erledigt werden, bevor esync lauffähig ist.
+</p>
+
+<h4>Einrichten des remoten Server</h4>
+<p>
+	Ich gehe an dieser Stelle davon aus, dass du das vorgesehene SSHFS-Dateisystem nutzen willst. 
+	Für andere Netzwerkprotokolle müssen die meisten Dinge analog befolgt werden.
+	Zunächst wird ein Server mit root-Zugriff benötigt, auf dem ein ssh-Server installiert ist 
+	(die meisten kommerziellen Rootserver erfüllen diese Voraussetzung). 
+	Erstelle auf dem Server am besten einen neuen Benutzer, sagen wir „<span class="user">esync</span>“ 
+	(kann natürlich auch anders heißen ;).
+	Nun wird ein leeres Verzeichnis für esync benötigt, in dem der neue Benutzer „<span class="user">esync</span>“ Schreibrechte hat.
+	Dafür eignet sich natürlich gut das home-Verzeichnis des Benutzers oder ein Unterverzsichnis davon.
+	Lege in diesem Verzeichnis (sagen wir „<span class="dir">/home/esync</span>“) folgende leere Unterverzeichnisse an:
+</p>
+<ul>
+	<li><span class="dir">files</span>: Hier werden die hochgeladenen Pakete gespeichert</li>
+	<li><span class="dir">info</span>: Hier werden Informationen zu hochgeladenen Paketen gespeichert</li>
+	<li><span class="dir">keys</span>: Hier können öffentliche Schlüssel hochgeladen werden</li>
+</ul>
+<p>
+	Außerdem muss noch die leere Datei <span class="file">.esyncdir</span> im esync-Verzeichnis angelegt werden, 
+	damit esync eine gültige Umgebung erkennt. 
+	Das Einrichten ist an dieser Stelle im Grunde nun angeschlossen, aber du solltest dir folgende Dinge merken:
+</p>
+<ul>
+	<li>Adresse des Servers (IP oder Domainname)</li>
+	<li>Name des neuen Benutzers (bei uns: <span class="user">esync</span>)</li>
+	<li>Passwort des neuen Benutzers</li>
+	<li>Esync-Verzeichnis (bei uns: <span class="dir">/home/esync</span>)</li>
+</ul>
+
+<h4>Einrichten der lokalen Dateien</h4>
+<p>
+	Zunächst musst du ein lokales Verzeichnis für esync anlegen. 
+	An einfachsten ist es, ein Verzeichnis „<span class="dir">esync</span>“ in deinem Homeverzeichnis dafür zu erstellen. 
+	Anchließend müssen in diesem Verzeichnis folgende Unterverzeichnisse erstellt werden:
+</p>
+<ul>
+	<li><span class="dir">files</span>: Hier werden die heruntergeladenen Pakete gespeichert</li>
+	<li><span class="dir">sandbox</span>: Dieser Ordner dient als Speicher für temporäre Dateien.</li>
+	<li><span class="dir">remote</span>: In dieses Verzeichnis wird das Serververezichnis gemountet.</li>
+</ul>
+
+<h4>Einrichten von esync</h4>
+<p>
+	Nun stellt sich die Frage, ob du esync gerne ohne Pfadangabe aufrufen möchtest. 
+	Falls du esync einfach über den Befehl <kbd>esync</kbd> aufrufen willst, 
+	muss das Script an eine Stelle verschoben/kopiert/gelinkt werden, welche in der PATH-Umgebungsvariable vorkommt.
+	Am besten eignet sich da meiner Meinung nach der Ordner /usr/local/bin, falls du root-Rechte besitzt.
+	Dann kannst du als root mit <kbd>ln -s /home/deinname/esync /usr/local/bin/esync</kbd> 
+	oder einem ähnlichen Befehl eine symbolische Verknüpfung auf das Script anlegen. 
+	Nun kannst du esync immer mit <kbd>esync</kbd> aufrufen.
+</p>
+
+<h4>Konfiguration von esync</h4>
+<p>
+	Nachdem du die vorigen Schritte erfolgreich durchgeführt hast, starte esync einmal ohne Parameter.
+	Wenn alle Voraussetzungen erfüllt sind, wirst du eine Meldung erhalten, 
+	dass esync keine Konfigurationsdatei gefunden hat. Nun wirst du gefragt, ob esync für dich eine Konfiguration schreiben soll.
+	Anworte mit "y", dann wird die Datei <span class="file">~/.esync</span> geschrieben.
+	Nun musst du die Konfigurationsdatei mit einem Editor deiner Wahl öffnen und die Konfiguration anpassen.
+	Hilfe dazu findest du in den Kommentaren der Beispielkonfiguration selbst.
+</p>
+
+<h4>Testen der Konfiguration</h4>
+<p>
+	Wenn du esync konfiguriert hast, kannst du zum Testen die Liste der hochgeladenen Dateien abfragen.
+	Gib dazu <kbd>esync --list</kbd> in die Konsole ein. Wenn du alles richtig gemacht hast, 
+	sollte keine Fehlermeldung erscheinen, sondern die (vermutlich leere) Liste der Dateien angezeigt werden.
+	Du musst vermutlich in Laufe des Vorgangs dein Serverpasswort eingeben, um die Verbindung herzustellen.
+	Wenn FUSE einen Fehler meldet, stelle bitte sicher, dass
+</p>
+<ul>
+	<li>Das fuse-Kernelmodul geladen wurde (ggf. mit <kbd>modprobe fuse</kbd> als root nachhelfen)</li>
+	<li>Dein aktueller lokaler Benutzer in der Benutzergruppe „fuse“ ist</li>
+</ul>
+<p>
+	Andere Fehlermeldungen geben meistens auch Aufschluss auf die Art des Problems.
+	Bei weiteren Problemen mit sshfs oder fuse, ziehe bitte die <a href="http://fuse.sourceforge.net/wiki/index.php/FAQ#Other_problems">fuse-FAQ</a> zu rate.
+</p>
+
+<h3>Arbeiten mit Schlüsseln</h3>
+<p>
+	GPG kennt zwei Sorten von Schlüssel:
+	Die „geheimen“ (oder „persönlichen“ oder „privaten“) Schlüssel dienen zum Entschlüsseln 
+	und die „öffentlichen“ Schlüssel dienen zum Verschlüsseln.
+	Es werden immer zusammengehörige Schlüsselpaare erzeugt; 
+	der öffentliche Schlüssel wird einem Kommunikationspartner weitergegeben und geheime Schlüssel wird auch geheim gehalten.
+	Wenn nun Partner A mit dem öffentlichen Schlüssel „B“ etwas verschlüsselt,
+	kann nur Partner B mit dem geheimen Schlüssel „B“ dieses wieder entschlüsseln. 
+	Wird etwas mit dem öffentlichen Schlüssel „A“ verschlüsselt, 
+	kann nur Partner A mit dem geheimen Schlüssel „A“ die Datei wieder entschlüsseln.
+	Es ist also sinnvoll, dass jeder Partner (mindestens) ein Schlüsselpaar erzeugt 
+	und den öffentlichen Schlüssel an alle Kommunikationspartner weitergibt. Zur besseren Verständnis siehe Abbildung 1.
+</p>
+<dl>
+	<dt><img src="keys.png" width="420" height="300" alt="Zusammenspiel der Schlüssel" /></dt>
+	<dd>Abb. 1: Zusammenspiel der Schlüssel</dd>
+</dl>
+
+<h4>Erstellen eines Schlüsselpaares</h4>
+<p>
+	Um mit GPG ein Schlüsselpaar zu erstellen, kannst du in der Konsole den Befehl <kbd>gpg --gen-key</kbd> eingeben.
+	Im folgenden Dialog wirst du zunächst nach der Art des Schlüsselns gefragt. Antworte mit „1“. 
+	Nun wirst du nach der Schlüssellänge gefragt. 
+	Hier gilt: Je länger des Schlüssel, desto sicherer ist er, aber desto länger dauert eine Aktion mit diesem Schlüssel auch.
+	Ich empfehle für den „normalen“ Gebrauch eine Länge von 2048 Bit (voreingestellt). 
+	Nun kannst du als nächstes noch entscheiden, ob der Schlüssel irgendwann einmal ungültig werden soll.
+	Als nächstes musst du deine Benutzer-ID festlegen, die aus folgenden Teilen besteht:
+</p>
+<ul>
+	<li>Vorname Nachname</li>
+	<li>E-Mail Adresse</li>
+	<li>Kommentar oder Spitzname</li>
+</ul>
+<p>
+	Über diese Angaben lässt sich ein Schlüssel oder eine verschlüsselte Datei dir zuordnen. 
+	Du kannst diese Angaben natürlich auch mit Phantasiewerten füllen, aber dadurch riskierst du, 
+	dass deine Freunde evtl. die Identität deines Schlüssels nicht feststellen können.
+	Wenn du jetzt die Angaben bestätigst, wird der Schlüssel erzeugt. Evtl. wirst du aufgefordert, 
+	deine Maus und Tastatur reichlich zu betätigen, um Zufallswerte zu erzeugen. 
+	Wenn der Vorgang abgeschlossen ist, wurde der Schlüssel deinem internen „Schlüsselbund“ hinzugefügt.
+</p>
+
+<h4>Exportieren eines Schlüssels</h4>
+<p>
+	Wenn du möchtest, dass dir deine Freunde verschlüsselte Datanpakete schicken können, solltest du deinen Schlüssel weitergeben.
+	Dafür gibt es einen Automatismus in esync: <kbd>esync --export-key deinekeyid</kbd>. 
+	Für „deinekeyid“ musst du natürlich einen Teil deines Schlüssels eingeben, also entweder einen Teil deines Namens 
+	oder den Spitzname.
+	Der Befehl sollte den Schlüssel exportieren und dann im das remote Verzeichnis <span class="dir">keys</span> hochladen, 
+	wo man ihn mit <kbd>esync --update-keys</kbd> erhält.
+</p>
+
+<h4>Herunterladen der Schlüssel</h4>
+<p>
+	Esync bringt eine Funktion mit, mit deren Hilfe ein Benutzer alle Schlüssel des <span class="dir">keys</span>-Verzeichnisses
+	herunterladen und importieren können. Dazu muss nur der Befehl <kbd>esync --update-keys</kbd> ausgeführt werden.
+	Es werden alle mit <kbd>esync --export-key deinekeyid</kbd> hochgeladenen Schlüssel versucht zu importieren,
+	schon vorhandenen Schlüssel werden selbstverständlich nicht importiert.
+</p>
+
+<h4>Anzeigen der eigenen Schlüssel</h4>
+<p>
+	Wenn du in Erfahrung bringen möchtest, welche Schlüssel auf deinem lokalen Rechner zur Verfügung stehen,
+	kannst du den Befehl <kbd>esync --list-keys</kbd> ausführen.
+	Dir wird nun eine Liste aller in GPG registrierten öffentlichen und privaten Schlüssel angezeigt.
+</p>
+
+<h3>Arbeiten mit Paketen</h3>
+<p>
+	Die Grundlage von Esync bildet der Transport von verschlüsselten Dateigruppierungen, die als „Pakete“ bereichnet werden.
+	Dabei kann es sich bei Paketen um Gepackte Verzeichnisse, ganze Archive oder einfache Dateien handeln.
+</p>
+
+<h4>Erstellen eines Datenpakets</h4>
+<p>
+	Eine wesentliche Aufgabe von Esync ist es, Dateien zu Paketen zu verpacken und diese auf den Austauschserver zu transportieren.
+	Dazu solle man die Vorgehensweise verstehen. Esync führt beim Erstellen eines Paketes folgende Schritte durch:
+</p>
+<ol>
+	<li>(Herstellen einer Verbindung zum Server)</li>
+	<li>Verpacken der Datei(en) in ein Tarball Archiv (Optional, falls nur eine Datei)</li>
+	<li>Komprimieren mit GZip</li>
+	<li>Verschlüsseln mit GPG (Optional)</li>
+	<li>Hochladen des Pakets</li>
+	<li>(Trennen der Verbindung)</li>
+</ol>
+<p>
+	Ein Aufruf von Esync zum erstellen eines Pakets hat folgende Syntax:<br />
+	<kbd>esync --make [--noencode|--for=empfänger] Paketname Datei1 [Datei2 [Datei3 ...]]</kbd><br />
+	Der erste Parameter <kbd>--make</kbd> sagt hierbei, dass ein Paket erstellt werden soll.
+	Parameter 2 gibt an, ob und wie verschlüsselt werden soll. 
+	Wird keine Verschlüsselung gewünscht, so kann der Parameter <kbd>--noencode</kbd> lauten oder ganz weggelassen werden.
+	Soll verschlüsselt werden, so ist unmittelbar nach dem Parameter <kbd>--for:</kbd> die Key-ID des Empfängers eingetragen werden
+	(Beispielsweise der Kommentar oder ein Teil des Namens). 
+	Achtung: Der Parameter der Key-ID darf nur aus alpahnumerischen Zeichen (inklusive Unterstrich) bestehen!
+	Der nächste Parameter gibt den Paketnamen an. 
+	Dieser Name wird in der Liste angezeigt und muss zum Herunterladen angegeben werden.
+	Der Paketname darf ebenfalls nur aus alpahnumerischen Zeichen (inklusive Unterstrich) bestehen.
+	Der Paketname muss außerdem eindeutig sein; 
+	existiert bereits ein Paket mit dem selben Namen, meldet esync einen Fehler nach dem Verbinden.
+	Als letzte Parameter folgen nun ein oder mehrere Dateien oder Verzeichnisse. 
+	Wildcards wie der Asterisk (*) sind nicht erlaubt.
+	Achtung: Wenn nur eine einzelne Datei übergeben wurde, erstellt esync standardmäßig kein TAR-Archiv. 
+	Damit nimmt die Datei nach dem herunterladen den Dateinamen des Pakets an.
+	Wenn du diesen Umstand verhindern möchtest (indem du ein TAR Archiv erzwingst), 
+	musst du die Option „ALWAYS_TAR“ in der Konfiguration aktivieren.
+</p>
+<p>
+	Nachdem die Verbindung aufgebaut wurde, zeigt esync zur Kontrolle noch einmal alle Werte des Pakets an.
+	Wenn du zufrieden bist, gebe „J“ oder nichts ein (Enter drücken), ansonsten antworte mit „n“.
+	Wenn du bestätigt hast, startet das erstellen des Pakets. 
+	Je nach Computerleistung, Bandbreite und Dateigröße, kann der Vorgang einige Zeit in Anspruch nehmen.
+	Wenn das Programm erfolgreich beendet wurde, 
+	kannst du mit <kbd>esync --list</kbd> kontrollieren, ob das Paket in der Liste auftaucht.
+</p>
+
+<h4>Herunterladen von Paketen</h4>
+<p>
+	Du kannst mit esync Pakete, die sich auf dem Server befinden, einfach herunterladen und entpacken.
+	Die Syntax für das herunterladen lautet:<br />
+	<kbd>esync --get [--download|--decode|--unzip|--untar] paketname</kbd><br />
+	Der erste Parameter gibt an, dass ein  Paket heruntergeladen werden soll, 
+	der letzte Parameter spezifiziert den bereits bekannten Paketnamen.
+	Mit den anderen (optionalen) Parametern kannst du noch einschränken, was getan werden soll:
+</p>
+<ul>
+	<li><kbd>--download</kbd>: Das Paket soll nur heruntergeladen werden!</li>
+	<li><kbd>--decode</kbd>: Das Paket wird heruntergeladen und zusätzlich wird noch versucht, das Paket zu entschlüsseln.
+		Wenn du den richtigen privaten Schlüssel nicht besitzt, wird es selbstverstndlich nicht gehen.</li>
+	<li><kbd>--unzip</kbd>: Das Paket wird nach dem Herunterladen und Entschlüsseln noch dekomprimiert.</li>
+	<li><kbd>--untar</kbd>: Nach dem Herunterladen, Entschlüsseln und Dekomprimieren wird das Paket noch entpackt, 
+	falls es sich um ein TAR Archiv handelt.</li>
+	<li>Wird keine Option angegeben, so wird automatisch der Parameter <kbd>--untar</kbd>, also alle Aktionen ausführen, angenommen.</li>
+</ul>
+
+<h4>Das temporäre Verzeichnis „sandbox“</h4>
+<p>
+	Esync speichert alle Zwischenergebnisse in dem Verzeichnis „<span class="dir">sandbox</span>“ auf dem lokalen Rechner ab.
+	Esync leert nach einer erfolgreichen Operation automatisch dieses Verzeichnis, 
+	aber wenn Esync „abgeschossen wird“ oder sonst etwas schiefläuft, kann es vorkommen, 
+	dass Dateien im Verzeichnis zurückbleiben und unnötigen Platz auf der Festplatte beanspruchen.
+	Diese temporären Dateien kann man ohne Bedenken löschen, wenn gerade kein esync-Prozess läuft.
+	Um mit esync dieses Verzeichnis zu leeren, gib einfach <kbd>esync --clean</kbd> ein.
+</p>
+
+<address>
+	Dieses Dokument stellt keine vollstädige Dokumentation zu esync da, 
+	sondern soll nur einen Einblick in die Funktionen und Nutzungsweise des Programms geben.<br />
+	Ich hoffe, das Programm kann sich dem Einen oder Anderen als nützlich erweisen.<br />
+	Wenn du Fragen, Anregungen oder auch beschwerden hast,
+	kannst du mir gerne an die Adresse <a href="mailto:mail@planet-metax.de">mail@planet-metax.de</a> schreiben.
+	<br />
+	<br />&copy; Copyright 2006 Christian „metax.“ Simon<br />
+	Dieses Dokument steht unter der <a href="http://www.gnu.org/licenses/gpl-2.0.html">GNU General Public License</a> (Version 2).
+</address>
+
+</div></body>
+</html>

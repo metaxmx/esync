@@ -1,0 +1,118 @@
+/* CSS FILE FOR ESYNC DOCS */
+
+* {
+	color: #000;
+	font-size: 100%;
+	font-weight: normal;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	padding: 2em;
+	background-color: #e3e3e3;
+	text-align: center;
+}
+
+
+#wrapper {
+	width: 50em;
+	background-color: #A0A0A0;
+	border: 3px solid #FFF;
+	margin: 0 auto;
+	text-align: left;
+}
+
+h1 {
+	font-size: 200%;
+	padding: 0.6em 1em;
+	text-align: center;
+	background-color: #0069a5;
+	color: #FFF;
+}
+
+h2 {
+	font-size: 130%;
+	padding: 0.3em 1em;
+	text-align: center;
+	color: #0069a5;
+	background-color: #FFF;
+	margin: 0 4px;
+}
+
+h3 {
+	font-size: 110%;
+	padding: 0.2em 1em;	
+	margin: 4px;
+	background-color: #0069a5;
+	color: #FFF;
+}
+
+p, dl, ul, ol, h4 {
+	background-color: #fff;
+	margin: 0 4px;
+	padding: 0.4em;	
+}
+
+p, li {
+	line-height: 140%;
+}
+
+h4 {
+	font-size: 110%;
+	font-weight: bold;
+	border-top: 4px solid #A0A0A0;
+	background-color: #eee;
+}
+
+address {
+	background-color: #0069a5;
+	color: #FFF;
+	margin: 4px;
+	padding: 0.2em;
+	font-style: normal;
+}
+
+li {
+	margin-left: 2em;
+}
+
+dl {
+	text-align: center;
+}
+
+a {
+	color: #0069a5;
+	text-decoration: underline;	
+}
+
+a:hover {
+	color: #999;
+	text-decoration: underline;		
+}
+
+address a {
+	color: #FFF;
+	text-decoration: underline;
+}
+address a:hover {
+	color: #CCC;
+	text-decoration: underline;
+}
+
+kbd {
+	background-color: #000;
+	color: #FFF;
+	padding: 0 0.5em;
+	white-space:nowrap;
+}
+
+.dir, .file {
+	/* font-weight: bold; */
+	background-color: #f1e9cd;
+}
+
+.user {
+	/* font-weight: bold; */
+	background-color: #d8f1cd;	
+}
