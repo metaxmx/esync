@@ -37,6 +37,11 @@ If you find such an incompatibility, feel free to create a patch, if you are abl
 
 The tool `esync` comes with NO WARRANTY.
 
+Language
+--------
+
+There is also a version of the program with german localization. To get it, check out the Git branch "german".
+
 License
 -------
 
