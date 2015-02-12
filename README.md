@@ -1,46 +1,49 @@
-esync - Encrypted Synchronization
-=================================
+esync - Verschlüsselte Synchronisation
+======================================
 
-About
------
+Über das Programm
+-----------------
 
-`esync` is a perl script, which will run primarily on linux systems.
-It's main purpose is it to create a connection to a rootserver via ssh (e.g. `sshfs` mount) and upload or download files.
-You can encrypt any uploaded file with a public key via [gpg][1], so that this file is safe to anyone, who does not have the corresponding private key.
-When uploading, `esync` can create a tarball archive, compress the file with gzip, encrypt the file with any public key and the upload it. While downloading, esync does it the other way round.
+`esync` ist ein Perl Script, das primär für Linux entwickelt wurde.
+Der Zweck des Programmes ist es eine Verbindung zu einem Rootserver über SSH herzustellen (z.B. `sshfs` mount) und Dateien hoch- und runterzuladen.
+Du kannst Dateien mit deinem öffentlichen Schlüssel per [gpg][1] verschlüsseln, so dass deine Dateien sicher vor allen sind, die den privaten Schlüssel dazu nicht besitzen.
+Beim Hochladen kann `esync` ein komprimiertes TAR (.tar.gz) erzeugen, die Datei mit einem öffentlichen Schlüssel verschlüsseln und dann hochladen. Beim Herunterladen wird alles wieder rückgängig gemacht.
 
-You can access `esync` as a normal user - you don't ever need root-privileges. You call `esync` from the commandline with parameters, but it will also ask for confirmation sometimes. You can configure the tool with a config file in your homedirectory.
+Du kannst `esync` als normaler User ausführen - es werden keine Root-Rechte benötigt.
+Du kannst `esync` von der Kommandozeile mit parametern starten, aber es wird dich auch manchmal nach einer Bestätigung fragen.
+Über eine Config-Datei in deinem Home-Verzeichnis kannst du das Tool konfigurieren. 
 
-If there are several people/systems using one rootserver account, any user can store his public key in a "key-directory". So, other people can import this public key and encrypt packages with that key (for him to use).
+Wenn mehrere Personen sich einen Server teilen, kann jeder User seinen Key in einem gemeinsamen "Schlüssel-Verzeichnis" speichern.
+Andere Benutzer können so deren öffentliche Schlüssel importieren und für sie Pakete verschlüsseln, die nur sie lesen können.
 
-`esync` is performing temporary actions in a "sandbox" directory and saving downloaded files in a special "incoming" directory, so that the system can not be damaged.
+`esync`führt einige Operationen in einem "Sandbox" Verzeichnis aus und speichert heruntergeladen Dateien in einem speziellen "Eingansgverzeichnis", so dass das System nicht beschädigt werden kann.
 
-These actions are implemented in esync so far:
-* display help
-* display usage
-* list available packages
-* upload (and encrypt) a package
-* download (and decrypt) a package
-* list keys in the storage
-* export a public key to the key-storage
-* import all keys from the key-storage
-* clean temporary directory
+Die folgenden Operation sind in `esync` bereits implementiert:
+* Hilfe anzeigen
+* Verwendung anzeigen
+* Verfügbare Pakete auflisten
+* Ein Paket hochladen (und verschlüsseln)
+* Ein Paket herunterladen und entschlüsseln
+* (Öffentliche) Schlüssel im gemeinsamen Schlüsselspeicher auflisten
+* Einen öffentlichen Schlüssel in den gemeinsamen Schlüsselspeicher exportieren
+* Alle öffentlichen Schlüssel aus dem Schlüsselspeicher importieren
+* Temporäres Verzeichnis leeren
 
-Of course, esync needs all used programs (`gpg`, `tar`, `cp`, `mv`, `mount`, etc.) to be installed.
+Natürlich müssen dafür alle benötigten Programme (`gpg`, `tar`, `cp`, `mv`, `mount`, etc.) installiert sein.
 
-Warning
+Warnung
 -------
 
-While I believe that the concepts of this tool still work, I want to point out that this program was developed in *2006* and that some of the commandline parameters or the behaviour of the used 3rd-party tool (like gpg) could have changed in the meantime.
+Obwohl ich glaube, dass die meisten Konzepte und Programme heute noch funktionieren müssten, möchte ich hervorheben, dass das Programm *2006* entwickelt wurde und es daher sein kann, dass einige der verwendeten Programm nicht mehr exakt so funktionieren wie damals.
 
-If you find such an incompatibility, feel free to create a patch, if you are able to.
+Falls du  dolche Probleme entdeckst und dazu in der Lage bist, entwickle doch gerne einen Patch dafür. 
 
-The tool `esync` comes with NO WARRANTY.
+Ich übernehme KEINERLEI GARANTIE für das Programm `esync`.
 
-License
--------
+Lizenz
+------
 
-`esync` is licensed under the [GNU Public License (GPL), Version 2][2].
+`esync` ist lizensiert unter der [GNU Public License (GPL), Version 2][2].
 
 
 [1]: http://www.gnupg.org/
